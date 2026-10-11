@@ -15,3 +15,6 @@ appsettings.*.local.json
 local-data/
 backups/
 exports/
+
+exports/
+*.db-journal

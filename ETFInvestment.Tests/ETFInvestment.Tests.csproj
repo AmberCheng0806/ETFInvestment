@@ -20,5 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ETFInvestment.Core\ETFInvestment.Core.csproj" />
+    <ProjectReference Include="..\ETFInvestment.Data\ETFInvestment.Data.csproj" />
   </ItemGroup>
 </Project>
