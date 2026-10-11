@@ -1,0 +1,209 @@
+<Window
+    x:Class="ETFInvestment.WPF.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="ETF Investment | 市場儀表板 v3.0"
+    Width="1250"
+    Height="780"
+    MinWidth="940"
+    MinHeight="620"
+    Background="{StaticResource BackgroundBrush}"
+    FontFamily="Microsoft JhengHei UI"
+    Loaded="Window_Loaded">
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  頂部標題  -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,18">
+            <TextBlock
+                FontSize="26"
+                FontWeight="Bold"
+                Text="ETF 投資儀表板" />
+
+            <TextBlock
+                Margin="0,5,0,0"
+                Foreground="{StaticResource SecondaryBrush}"
+                Text="本機市場行情 · 只讀 market.db · 不包含私人持倉、正式買賣訊號" />
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="260" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!--  左側 ETF 清單  -->
+            <Border
+                Grid.Column="0"
+                Padding="15"
+                Background="{StaticResource PanelBrush}"
+                CornerRadius="12">
+
+                <DockPanel>
+                    <TextBlock
+                        Margin="0,0,0,16"
+                        DockPanel.Dock="Top"
+                        FontSize="17"
+                        FontWeight="Bold"
+                        Text="追蹤清單" />
+
+                    <StackPanel x:Name="EtfButtons" />
+                </DockPanel>
+            </Border>
+
+            <!--  右側 ETF 詳細資料  -->
+            <Border
+                Grid.Column="2"
+                Padding="18"
+                Background="{StaticResource PanelBrush}"
+                CornerRadius="12">
+
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!--  ETF 標題及最新行情  -->
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel>
+                            <TextBlock
+                                x:Name="TitleText"
+                                FontSize="23"
+                                FontWeight="Bold"
+                                Text="載入中…" />
+
+                            <TextBlock
+                                x:Name="QuoteText"
+                                Margin="0,8,0,0"
+                                Foreground="{StaticResource SecondaryBrush}" />
+                        </StackPanel>
+
+                        <Button
+                            Grid.Column="1"
+                            VerticalAlignment="Top"
+                            Click="Reload_Click"
+                            Content="重新讀取快取" />
+                    </Grid>
+
+                    <!--  資料驗證狀態  -->
+                    <TextBlock
+                        x:Name="StatusText"
+                        Grid.Row="1"
+                        Margin="0,15,0,13"
+                        Foreground="#F3C580"
+                        TextWrapping="Wrap" />
+
+                    <!--  圖表操作  -->
+                    <WrapPanel
+                        Grid.Row="2"
+                        Margin="0,0,0,12"
+                        VerticalAlignment="Center">
+
+                        <!--  期間  -->
+                        <TextBlock
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center"
+                            Text="期間" />
+                        <ComboBox
+                            x:Name="PeriodCombo"
+                            Width="90"
+                            Margin="0,0,15,0"
+                            SelectedIndex="2"
+                            SelectionChanged="ChartOptions_Changed"
+                            Style="{StaticResource DarkComboBoxStyle}">
+
+                            <ComboBoxItem Content="1個月" Tag="1M" />
+                            <ComboBoxItem Content="3個月" Tag="3M" />
+                            <ComboBoxItem Content="6個月" Tag="6M" />
+                            <ComboBoxItem Content="1年" Tag="1Y" />
+                            <ComboBoxItem Content="全部" Tag="ALL" />
+                        </ComboBox>
+
+                        <!--  價格模式  -->
+                        <TextBlock
+                            Margin="0,0,8,0"
+                            VerticalAlignment="Center"
+                            Text="價格" />
+
+                        <ComboBox
+                            x:Name="PriceModeCombo"
+                            Width="110"
+                            Margin="0,0,15,0"
+                            SelectedIndex="0"
+                            SelectionChanged="ChartOptions_Changed"
+                            Style="{StaticResource DarkComboBoxStyle}">
+
+                            <ComboBoxItem Content="調整後" Tag="Adjusted" />
+                            <ComboBoxItem Content="原始收盤" Tag="Raw" />
+                        </ComboBox>
+                        <!--  移動平均線  -->
+                        <CheckBox
+                            x:Name="Ma20Check"
+                            Margin="0,0,12,0"
+                            VerticalAlignment="Center"
+                            Click="ChartOptions_Changed"
+                            Content="20日均線"
+                            IsChecked="True" />
+
+                        <CheckBox
+                            x:Name="Ma120Check"
+                            VerticalAlignment="Center"
+                            Click="ChartOptions_Changed"
+                            Content="120日均線"
+                            IsChecked="True" />
+                    </WrapPanel>
+
+                    <!--  ETF 走勢圖  -->
+                    <Grid
+                        Grid.Row="3"
+                        Margin="0,0,0,12"
+                        Background="#101A2B">
+
+                        <Canvas
+                            x:Name="ChartCanvas"
+                            ClipToBounds="True"
+                            SizeChanged="ChartCanvas_SizeChanged" />
+
+                        <TextBlock
+                            x:Name="ChartEmptyText"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Text="等待行情資料…" />
+                    </Grid>
+
+                    <!--  圖表說明  -->
+                    <TextBlock
+                        x:Name="ChartFootnote"
+                        Grid.Row="4"
+                        FontSize="12"
+                        Foreground="{StaticResource SecondaryBrush}"
+                        TextWrapping="Wrap" />
+
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!--  底部提示  -->
+        <TextBlock
+            Grid.Row="2"
+            Margin="0,15,0,0"
+            Foreground="#F3C580"
+            Text="注意：內部價格稽核通過 ≠ 發行商事件完整性已驗證。圖表僅供研究，不提供交易建議。" />
+
+    </Grid>
+</Window>

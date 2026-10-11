@@ -1,41 +1,22 @@
-# ETFInvestment v2.4 — 還原價格連續性稽核（內部驗證）
+# ETFInvestment v3.0｜WPF 本機市場儀表板
 
-完整更新 ZIP，保留 Core、Data、Collector、Tests。**不含交易訊號、Token、私人持倉**。
+此 ZIP **完整保留 v2.4 的 Core、Data、Collector、Tests**，新增 `ETFInvestment.WPF`。本版僅使用公開行情快取 `market.db`，**不會讀寫 `portfolio.db`，不儲存 Token，不產生實際交易訊號**。
 
-## 本版新增
+## 驗收步驟（Windows / Visual Studio 2022）
 
-- `ETFInvestment.Core/AdjustedPriceAudit.cs`：利用原始行情與已儲存之除息／分割事件，套用既有 `AdjustedSeries`，對可疑價格跳躍做檢查。
-- `ETFInvestment.Collector --audit-only`：只讀本機 `market.db`，不呼叫網路 API，也不存取 `portfolio.db`。
-- `ETFInvestment.Tests/AdjustedPriceAuditTests.cs`：6 個稽核測試，包括 00631L 22:1 分割、錯誤分割因子、缺失事件、現金股利、重複事件及資料不足。
+1. 先將 v2.4 Commit。關閉 Visual Studio，將本 ZIP 解壓覆蓋原專案（保留 `.git`）。
+2. `dotnet restore`、`dotnet build`、`dotnet test`。原有測試應繼續通過（v2.4 預期34項，請依你的本機結果為準）。
+3. 將 `ETFInvestment.WPF` 設定為**啟始專案**，按 F5；或執行 `dotnet run --project ETFInvestment.WPF`。
+4. 首頁有0050、0056、00878、00631L，點選後應顯示收盤價、資料日期、20交易日調整價漲跌幅、歷史圖。
+5. 測試期間選單（1月／3月／6月／1年／全部）、原始／調整後收盤價切換、20／120日均線勾選。
+6. 本版不連網。若行情過期，先在命令列執行 `dotnet run --project ETFInvestment.Collector -- --from 2025-01-01`，再回 WPF 點「重新讀取快取」。
 
-## 操作（Windows PowerShell，Solution 根目錄）
+## 已知限制與安全標記
 
-```powershell
-dotnet restore
-dotnet build
-dotnet test
-```
-
-前一版預期 28 個測試，此版新增 6 個，**預期 34 個**（以實際結果為準，尚未在本環境以 .NET SDK 編譯）。
-
-你已成功回補四檔行情與事件，此版先執行：
-
-```powershell
-dotnet run --project ETFInvestment.Collector -- --from 2025-01-01 --audit-only
-```
-
-例如輸出：`[AUDIT / NOT SOURCE-VERIFIED] 00631L: prices=..., cached events=..., adjusted points=..., findings=0`。
-
-- `findings=0` 只表示**快取資料在已知事件下通過機械連續性檢查**，不表示歷史除息／分割事件完整，更不代表股價／投資策略可靠。
-- `findings>0` 會顯示日期與原因，並以非零結束碼結束。
-- 股利參考價格採官方參考價因子；**歷史還原價格不是含息現金流績效**。
-- 對於 0050 與 00631L 分割日期需另與交易所公告核對；00631L 2026-03-31 已使用 22:1；其餘已取得事件也要檢查完整性。
-- 調整後價格序列目前只在記憶體計算，尚未對外宣稱可產生正式買點。
-
-## 限制與後續
-
-門檻目前採保守初步值：無已知事件的相鄰交易日價格跳動絕對值≥35%時標記；有事件而調整後跳動≥20%時標記。這些是**資料健檢參數**，不是交易策略或市場異常的絕對判定。重要缺漏仍可能通過，尤其是小額股利與長期間資料源缺口。下一步應將事件清單與發行商／TWSE 逐筆核對，並與獨立調整價來源比較，才開啟買賣訊號。
-
-## 安全
-
-FinMind Token 繼續留在 Collector User Secrets；`market.db` 位於 `%LOCALAPPDATA%\ETFInvestment`；不涉及 `portfolio.db`。原本 `.gitignore` 繼續使用。可覆蓋先前程式檔案，保留 `.git`。
+- 不使用 LiveCharts2；使用原生 WPF Canvas + Polyline，無新增圖表 NuGet，相容性較容易驗證。
+- 顯示的20交易日變化，是**調整後價格比例**，不是價格原始漲跌、也不是投資帳戶含現金流的報酬率。
+- `AdjustedPriceAudit` 通過只代表機械連續性檢查通過，不代表歷史事件完整；UI 持續顯示「來源未驗證」，不提供買賣提示。
+- 缺少快取或資料錯誤時，介面明確顯示錯誤，不會自動建立私人資料庫。
+- 日線價格只更新到已下載的交易日；不提供盤中即時行情。
+- WPF 需要 Windows；目前執行環境無法使用 .NET SDK 編譯或呈現 WPF，所以**必須由你在 Visual Studio 真正編譯與驗收畫面**。
+- 下階段 v3.1 才加入私人交易記錄、配息、正2基準，以及在來源驗證完成後的候選買點。

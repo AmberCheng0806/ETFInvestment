@@ -10,6 +10,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ETFInvestment.Data", "ETFIn
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ETFInvestment.Collector", "ETFInvestment.Collector\ETFInvestment.Collector.csproj", "{A375B380-B8F0-4F73-916A-8B3A786E132C}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ETFInvestment.WPF", "ETFInvestment.WPF\ETFInvestment.WPF.csproj", "{D81AF0E3-B276-4F42-8846-7E2467450629}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,6 +34,10 @@ Global
 		{A375B380-B8F0-4F73-916A-8B3A786E132C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A375B380-B8F0-4F73-916A-8B3A786E132C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A375B380-B8F0-4F73-916A-8B3A786E132C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D81AF0E3-B276-4F42-8846-7E2467450629}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D81AF0E3-B276-4F42-8846-7E2467450629}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D81AF0E3-B276-4F42-8846-7E2467450629}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D81AF0E3-B276-4F42-8846-7E2467450629}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
