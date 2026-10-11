@@ -13,6 +13,8 @@ public sealed class FinMindException : Exception
 }
 
 /// <summary>HTTP and FinMind JSON parsing only. Never puts the token in query parameters or logs.</summary>
+public sealed record CorporateActionFetch(IReadOnlyList<AdjustmentEvent> Events, int RawCount);
+
 public sealed class FinMindClient
 {
     private readonly HttpClient _http;
@@ -65,10 +67,51 @@ public sealed class FinMindClient
         return list.OrderBy(x=>x.ExDate).ToArray();
     }
 
-    private async Task<JsonDocument> FetchAsync(string dataset,string symbol,DateOnly start,DateOnly end,CancellationToken ct)
+    /// <summary>FinMind TaiwanStockSplitPrice is a market-wide dataset. Do not send data_id; filter locally.</summary>
+    public async Task<CorporateActionFetch> GetSplitEventsAsync(string symbol, DateOnly start, DateOnly end, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(symbol) || end < start) throw new ArgumentException("Invalid symbol/date range");
-        string url = _endpoint + "?dataset=" + Uri.EscapeDataString(dataset) + "&data_id=" + Uri.EscapeDataString(symbol)
+        using var json = await FetchAsync("TaiwanStockSplitPrice", null, start, end, ct);
+        var events = new List<AdjustmentEvent>();
+        int matched = 0;
+        foreach (var row in json.RootElement.GetProperty("data").EnumerateArray())
+        {
+            if (GetText(row,"stock_id") != symbol) continue;
+            if (!DateOnly.TryParseExact(GetText(row,"date"),"yyyy-MM-dd",CultureInfo.InvariantCulture,DateTimeStyles.None,out var day))
+                throw new FinMindException("Invalid split date");
+            if (day < start || day > end) continue;
+            matched++;
+            string type = GetText(row,"type");
+            if (!TryDecimal(row,"before_price",out var before) || !TryDecimal(row,"after_price",out var after) || before <= 0 || after <= 0)
+                throw new FinMindException($"Missing split prices on {day}");
+
+            // Some real ETF split records may use a type label other than the plain Chinese word "分割".
+            // Do not generalize unknown types: accept only the precise 00631L event independently
+            // corroborated by the Taiwan Stock Exchange's 2026-03-30 issuer announcement.
+            // Exchange announcement: 22 new units per 1 old unit, previous close 443.15,
+            // reference reopening price 20.14 on 2026-03-31 (rounded to cents).
+            bool verified00631LSplit = symbol == "00631L" && day == new DateOnly(2026,3,31)
+                && Math.Abs(before - 443.15m) <= 0.02m
+                && Math.Abs(after - 20.14m) <= 0.02m
+                && Math.Abs(before / after - 22m) <= 0.1m;
+
+            if (!type.Contains("分割",StringComparison.Ordinal) && !verified00631LSplit)
+                throw new FinMindException($"Unknown split type on {day}: type='{type}', before={before}, after={after}; manual review required");
+
+            // For the confirmed 00631L event, use the exact official 1/22 split ratio,
+            // not 20.14 / 443.15 which is affected by reference-price rounding.
+            events.Add(verified00631LSplit
+                ? new AdjustmentEvent(day, 1m / 22m, AdjustmentKind.Split,
+                    "TWSE:00631L:2026-03-30:22-to-1 + FinMind:TaiwanStockSplitPrice")
+                : ETFInvestment.Core.AdjustedSeries.FromReferencePrice(day,before,after,
+                    AdjustmentKind.Split,"FinMind:TaiwanStockSplitPrice"));
+        }
+        return new CorporateActionFetch(events.OrderBy(x=>x.ExDate).ToArray(),matched);
+    }
+
+    private async Task<JsonDocument> FetchAsync(string dataset,string? symbol,DateOnly start,DateOnly end,CancellationToken ct)
+    {
+        if (end < start) throw new ArgumentException("Invalid date range");
+        string url = _endpoint + "?dataset=" + Uri.EscapeDataString(dataset) + (symbol is null ? "" : "&data_id=" + Uri.EscapeDataString(symbol))
             + "&start_date=" + start.ToString("yyyy-MM-dd",CultureInfo.InvariantCulture)
             + "&end_date=" + end.ToString("yyyy-MM-dd",CultureInfo.InvariantCulture);
         const int maxAttempts=3;

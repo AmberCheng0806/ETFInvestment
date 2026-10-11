@@ -8,6 +8,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ETFInvestment.Tests", "ETFI
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ETFInvestment.Data", "ETFInvestment.Data\ETFInvestment.Data.csproj", "{B25730B1-78C2-4BDA-B553-DF0C6BB90B92}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ETFInvestment.Collector", "ETFInvestment.Collector\ETFInvestment.Collector.csproj", "{A375B380-B8F0-4F73-916A-8B3A786E132C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,6 +28,10 @@ Global
 		{B25730B1-78C2-4BDA-B553-DF0C6BB90B92}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B25730B1-78C2-4BDA-B553-DF0C6BB90B92}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B25730B1-78C2-4BDA-B553-DF0C6BB90B92}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A375B380-B8F0-4F73-916A-8B3A786E132C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A375B380-B8F0-4F73-916A-8B3A786E132C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A375B380-B8F0-4F73-916A-8B3A786E132C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A375B380-B8F0-4F73-916A-8B3A786E132C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

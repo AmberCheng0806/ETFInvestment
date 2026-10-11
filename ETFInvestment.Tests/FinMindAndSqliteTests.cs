@@ -85,4 +85,73 @@ public sealed class FinMindAndSqliteTests
             Assert.Empty(await repo.GetPricesAsync("00631L",new DateOnly(2026,3,1),new DateOnly(2026,3,2)));
         }finally{Directory.Delete(folder,true);}
     }
+
+    [Fact] public async Task SplitDatasetUsesMarketWideQueryAndParses0050()
+    {
+        var client=Client(req=>
+        {
+            Assert.Contains("dataset=TaiwanStockSplitPrice",req.RequestUri!.Query);
+            Assert.DoesNotContain("data_id=",req.RequestUri.Query);
+            return Json("""{"status":200,"data":[{"date":"2025-06-18","stock_id":"0050","type":"分割","before_price":188.65,"after_price":47.16},{"date":"2025-06-18","stock_id":"OTHER","type":"分割","before_price":100,"after_price":25}]}""");
+        });
+        var result=await client.GetSplitEventsAsync("0050",new DateOnly(2025,1,1),new DateOnly(2025,12,31));
+        Assert.Equal(1,result.RawCount);
+        Assert.Single(result.Events);
+        Assert.Equal(ETFInvestment.Core.Models.AdjustmentKind.Split,result.Events[0].Kind);
+        Assert.Equal(47.16m/188.65m,result.Events[0].Factor);
+    }
+    [Fact] public async Task Verified00631LSplitAcceptsUnrecognizedTypeOnlyWhenOfficialPricesMatch()
+    {
+        var client=Client(_=>Json("""{"status":200,"data":[{"date":"2026-03-31","stock_id":"00631L","type":"受益憑證分割換發","before_price":443.15,"after_price":20.14}]}"""));
+        var result=await client.GetSplitEventsAsync("00631L",new DateOnly(2026,1,1),new DateOnly(2026,12,31));
+        Assert.Equal(1,result.RawCount);
+        var ev=Assert.Single(result.Events);
+        Assert.Equal(ETFInvestment.Core.Models.AdjustmentKind.Split,ev.Kind);
+        Assert.Equal(1m/22m,ev.Factor);
+        Assert.Contains("TWSE",ev.Source);
+    }
+    [Fact] public async Task UnknownSplitTypeRejectsUnverified00631LNumbers()
+    {
+        var client=Client(_=>Json("""{"status":200,"data":[{"date":"2026-03-31","stock_id":"00631L","type":"不明事件","before_price":443.15,"after_price":25}]}"""));
+        var ex=await Assert.ThrowsAsync<FinMindException>(()=>client.GetSplitEventsAsync("00631L",new DateOnly(2026,1,1),new DateOnly(2026,12,31)));
+        Assert.Contains("manual review",ex.Message);
+    }
+    [Fact] public async Task UnknownSplitTypeOnAnotherDateStillBlocks()
+    {
+        var client=Client(_=>Json("""{"status":200,"data":[{"date":"2026-04-01","stock_id":"00631L","type":"不明事件","before_price":443.15,"after_price":20.14}]}"""));
+        await Assert.ThrowsAsync<FinMindException>(()=>client.GetSplitEventsAsync("00631L",new DateOnly(2026,1,1),new DateOnly(2026,12,31)));
+    }
+    [Fact] public async Task RecognizedSplitTypeStillParsesNormally()
+    {
+        var client=Client(_=>Json("""{"status":200,"data":[{"date":"2026-03-31","stock_id":"00631L","type":"分割","before_price":443.15,"after_price":20.14}]}"""));
+        var item=Assert.Single((await client.GetSplitEventsAsync("00631L",new DateOnly(2026,1,1),new DateOnly(2026,12,31))).Events);
+        Assert.Equal(1m/22m,item.Factor);
+    }
+
+    [Fact] public async Task BackfillFetchesRequestedStartEvenWithNewerCache()
+    {
+        string folder=Tmp();try
+        {
+            var repo=new MarketRepository(Path.Combine(folder,"market.db"));await repo.InitializeAsync();
+            await repo.UpsertPricesAsync([new("0050",new DateOnly(2026,10,8),50m)]);
+            var requested=new List<string>();
+            var client=Client(req=>
+            {
+                requested.Add(req.RequestUri!.Query);
+                if(req.RequestUri.Query.Contains("TaiwanStockPrice"))
+                    return Json("""{"status":200,"data":[{"date":"2025-01-02","stock_id":"0050","close":40}]}""");
+                return Json("""{"status":200,"data":[]}""");
+            });
+            var result=await new MarketDataUpdater(client,repo).UpdateAsync("0050",new DateOnly(2025,1,1),new DateOnly(2026,10,8),backfill:true);
+            Assert.False(result.RequiresManualReview,result.Message);
+            Assert.Contains(requested,q=>q.Contains("start_date=2025-01-01"));
+            Assert.Single(await repo.GetPricesAsync("0050",new DateOnly(2025,1,1),new DateOnly(2025,1,5)));
+        } finally { Directory.Delete(folder,true); }
+    }
+    [Fact] public async Task DividendTypeSingleChineseCharacterIsAccepted()
+    {
+        var client=Client(_=>Json("""{"status":200,"data":[{"date":"2025-03-01","stock_id":"0056","before_price":40,"reference_price":39,"stock_or_cache_dividend":"息"}]}"""));
+        var result=await client.GetReferenceEventsAsync("0056",new DateOnly(2025,1,1),new DateOnly(2025,12,31));
+        Assert.Single(result);
+    }
 }
