@@ -1,4 +1,5 @@
 using System.Globalization;
+using ETFInvestment.Core;
 using ETFInvestment.Core.Models;
 using ETFInvestment.Data.FinMind;
 using ETFInvestment.Data.Services;
@@ -25,6 +26,7 @@ internal static class Program
         DateOnly end = DateOnly.FromDateTime(DateTime.Today);
         bool pricesOnly = false;
         bool backfill = false;
+        bool auditOnly = false;
         string[] symbols = DefaultSymbols;
 
         try
@@ -42,9 +44,11 @@ internal static class Program
                         break;
                     case "--prices-only": pricesOnly = true; break;
                     case "--backfill": backfill = true; break;
+                    case "--audit-only": auditOnly = true; break;
                     default: throw new ArgumentException($"Unknown argument: {args[i]}");
                 }
             }
+            if (auditOnly && (backfill || pricesOnly)) throw new ArgumentException("--audit-only cannot be combined with --backfill or --prices-only");
             if (start > end) throw new ArgumentException("--from cannot be later than --to");
             if (end > DateOnly.FromDateTime(DateTime.Today)) throw new ArgumentException("--to cannot be in the future");
         }
@@ -63,15 +67,15 @@ internal static class Program
             ?? Environment.GetEnvironmentVariable("FINMIND_TOKEN")
             ?? configuration["FinMind:Token"];
 
-        Console.WriteLine("ETFInvestment Collector v2.3 — market data verification only");
-        Console.WriteLine($"Date range: {start:yyyy-MM-dd} to {end:yyyy-MM-dd}; mode: {(pricesOnly ? "PRICE-ONLY" : "PRICE + DIVIDEND + SPLIT")} ; backfill={backfill}");
+        Console.WriteLine("ETFInvestment Collector v2.4 — market data verification only");
+        Console.WriteLine($"Date range: {start:yyyy-MM-dd} to {end:yyyy-MM-dd}; mode: {(auditOnly ? "CACHED ADJUSTED PRICE AUDIT" : pricesOnly ? "PRICE-ONLY" : "PRICE + DIVIDEND + SPLIT")} ; backfill={backfill}");
         Console.WriteLine("Token configured: " + (!string.IsNullOrWhiteSpace(token) ? "YES" : "NO (anonymous quota may apply)"));
         Console.WriteLine("Market database: " + DatabasePaths.Market);
         Console.WriteLine("Private portfolio.db: NOT ACCESSED");
         Console.WriteLine();
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(40) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("ETFInvestment-Collector/2.3");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("ETFInvestment-Collector/2.4");
         var client = new FinMindClient(http, token);
         var repository = new MarketRepository();
         try { await repository.InitializeAsync(); }
@@ -86,6 +90,19 @@ internal static class Program
         {
             try
             {
+                if (auditOnly)
+                {
+                    var prices = await repository.GetPricesAsync(symbol, start, end);
+                    var events = await repository.GetAdjustmentsAsync(symbol);
+                    var report = AdjustedPriceAudit.Check(symbol, prices, events);
+                    Console.WriteLine($"[AUDIT / NOT SOURCE-VERIFIED] {symbol}: prices={report.PriceCount}, cached events={report.EventCount}, adjusted points={report.AdjustedPrices.Count}, findings={report.Findings.Count}");
+                    foreach (var finding in report.Findings)
+                        Console.WriteLine($"  [REVIEW] {finding.Date?.ToString("yyyy-MM-dd") ?? "n/a"}: {finding.Code} - {finding.Message}");
+                    if (report.HasBlockingFindings) errors++;
+                    // Never call an internally-consistent dataset 'fully verified'; source completeness
+                    // must still be checked against the issuer/exchange and an independent price series.
+                    continue;
+                }
                 DateOnly? oldLatest = await repository.LatestDateAsync(symbol);
                 if (pricesOnly)
                 {
@@ -144,6 +161,7 @@ internal static class Program
         }
         Console.WriteLine();
         Console.WriteLine($"Completed. Symbols requiring attention: {errors}/{symbols.Distinct().Count()}");
+        Console.WriteLine("Internal audit passing does NOT certify event completeness or signal accuracy.");
         Console.WriteLine("Important: 2025/2026 ETF splits and dividend adjustment data MUST be independently validated before trading signals/backtests.");
         return errors == 0 ? 0 : 1;
     }
@@ -157,8 +175,9 @@ internal static class Program
         DateOnly.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture);
     private static void PrintUsage()
     {
-        Console.WriteLine("dotnet run --project ETFInvestment.Collector -- [--from yyyy-MM-dd] [--to yyyy-MM-dd] [--symbols 0050,0056,00878,00631L] [--prices-only] [--backfill]");
+        Console.WriteLine("dotnet run --project ETFInvestment.Collector -- [--from yyyy-MM-dd] [--to yyyy-MM-dd] [--symbols 0050,0056,00878,00631L] [--prices-only] [--backfill] [--audit-only]");
         Console.WriteLine("--prices-only: raw-price API check only. --backfill: refetch specified historical period instead of recent overlap.");
-        Console.WriteLine("Neither mode authorizes trading signals; corporate actions must be verified independently.");
+        Console.WriteLine("--audit-only reads cached market.db; it does not call FinMind or access portfolio.db.");
+        Console.WriteLine("No mode authorizes trading signals; corporate actions must be verified independently.");
     }
 }

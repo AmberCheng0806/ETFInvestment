@@ -1,23 +1,14 @@
-# ETFInvestment v2.3：00631L 官方分割事件辨識修正
+# ETFInvestment v2.4 — 還原價格連續性稽核（內部驗證）
 
-這是完整更新版（Core、Data、Tests、Collector）。保留前一版的所有程式與測試。
+完整更新 ZIP，保留 Core、Data、Collector、Tests。**不含交易訊號、Token、私人持倉**。
 
-## 修正原因
+## 本版新增
 
-v2.2 真實回補顯示 `00631L` 在 `2026-03-31` 有分割資料，但 FinMind API 回傳的 `type` 不符合舊版只接受含「分割」文字的辨識條件，導致 `[REVIEW]`。
+- `ETFInvestment.Core/AdjustedPriceAudit.cs`：利用原始行情與已儲存之除息／分割事件，套用既有 `AdjustedSeries`，對可疑價格跳躍做檢查。
+- `ETFInvestment.Collector --audit-only`：只讀本機 `market.db`，不呼叫網路 API，也不存取 `portfolio.db`。
+- `ETFInvestment.Tests/AdjustedPriceAuditTests.cs`：6 個稽核測試，包括 00631L 22:1 分割、錯誤分割因子、缺失事件、現金股利、重複事件及資料不足。
 
-根據臺灣證券交易所於 2026-03-30 公布的元大投信正式公告：00631L 在 2026-03-31 以 **22:1** 分割後恢復交易；分割前最後收盤價 **443.15 元**，分割後參考價 **20.14 元**。官方公告：https://www.twse.com.tw/zh/ETFortune/announcement?company=A00005&date=20260330&fund=00631L&seq=1&type=all
-
-## 修改範圍
-
-- `ETFInvestment.Data/FinMind/FinMindClient.cs`：未知的 split `type` 不再一律忽略；**只**在 00631L、2026-03-31、before≈443.15、after≈20.14、近似 22:1 全部符合時，依已核對的官方公告接納該事件；其他未知事件仍擋下待人工檢查。該日事件的調整因子用精確 `1/22`，避免參考價四捨五入造成偏差。
-- `ETFInvestment.Tests/FinMindAndSqliteTests.cs`：新增 4 項測試，確認官方事件可識別、不符數字或日期的未知事件不能放行，以及正常「分割」標籤仍可處理。
-- `ETFInvestment.Collector/Program.cs`：版本顯示更新為 v2.3。
-
-## Windows 驗收步驟
-
-1. 先 Commit 前一版，關閉 VS，再將 ZIP 內容覆蓋專案（保留 `.git`）。
-2. 在 Solution 根目錄執行：
+## 操作（Windows PowerShell，Solution 根目錄）
 
 ```powershell
 dotnet restore
@@ -25,24 +16,26 @@ dotnet build
 dotnet test
 ```
 
-原 v2.2 預期 24 項測試，本次新增 4 項，**預期 28 項**，最終以實際 Test Explorer 結果為準。這份程式未在本環境進行 .NET 編譯。
+前一版預期 28 個測試，此版新增 6 個，**預期 34 個**（以實際結果為準，尚未在本環境以 .NET SDK 編譯）。
 
-3. 下載真實 00631L 資料並確認能辨識分割：
-
-```powershell
-dotnet run --project ETFInvestment.Collector -- --symbols 00631L --from 2025-01-01 --backfill
-```
-
-4. 若成功，再對四檔驗證：
+你已成功回補四檔行情與事件，此版先執行：
 
 ```powershell
-dotnet run --project ETFInvestment.Collector -- --from 2025-01-01 --backfill
+dotnet run --project ETFInvestment.Collector -- --from 2025-01-01 --audit-only
 ```
 
-期望 00631L 顯示 `split events=1`、`Symbols requiring attention: 0/4`。如果來源的實際 `before_price` / `after_price` 或 `type` 不符合預期，程式仍會顯示 `[REVIEW]` 並輸出**不含 Token**的事件數字；請回傳錯誤文字，不要硬改常數，也不要直接啟用買賣訊號。
+例如輸出：`[AUDIT / NOT SOURCE-VERIFIED] 00631L: prices=..., cached events=..., adjusted points=..., findings=0`。
 
-## 尚未完成驗證
+- `findings=0` 只表示**快取資料在已知事件下通過機械連續性檢查**，不表示歷史除息／分割事件完整，更不代表股價／投資策略可靠。
+- `findings>0` 會顯示日期與原因，並以非零結束碼結束。
+- 股利參考價格採官方參考價因子；**歷史還原價格不是含息現金流績效**。
+- 對於 0050 與 00631L 分割日期需另與交易所公告核對；00631L 2026-03-31 已使用 22:1；其餘已取得事件也要檢查完整性。
+- 調整後價格序列目前只在記憶體計算，尚未對外宣稱可產生正式買點。
 
-本版只修正**特定已公告的分割事件辨識**，尚未確認四檔 ETF 的全部除息事件、全期調整後序列及價格回檔訊號是否正確。Collector 仍為驗證工具，**不自動交易、也不提供正式買點**。
+## 限制與後續
 
-FinMind Token 仍儲存於 Collector 的 User Secrets 或環境變數；ZIP 不含 Token、portfolio.db 或其他個人資料。
+門檻目前採保守初步值：無已知事件的相鄰交易日價格跳動絕對值≥35%時標記；有事件而調整後跳動≥20%時標記。這些是**資料健檢參數**，不是交易策略或市場異常的絕對判定。重要缺漏仍可能通過，尤其是小額股利與長期間資料源缺口。下一步應將事件清單與發行商／TWSE 逐筆核對，並與獨立調整價來源比較，才開啟買賣訊號。
+
+## 安全
+
+FinMind Token 繼續留在 Collector User Secrets；`market.db` 位於 `%LOCALAPPDATA%\ETFInvestment`；不涉及 `portfolio.db`。原本 `.gitignore` 繼續使用。可覆蓋先前程式檔案，保留 `.git`。
